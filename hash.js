@@ -18,7 +18,7 @@ if (existsSync(fileName)) {
 
 bcrypt.compare(
     inputPassword,
-    '$2b$10$gXKuVtPpSqc1N.qdLWejdOtFQWfS5ivQSesB2iX/V2CgSgoh5Vmzq',
+    storedHash,
 ).then ((data) => {
     console.log(data);        
 }).catch((err) => {
