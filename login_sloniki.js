@@ -47,7 +47,7 @@ async function registerSlonik(username, password) {
         RETURNING *`;
    const res = await pool.query(query, [username, hash]);
     
-    console.log('✅ Slonik registered successfully:', res.rows[0].username);
+    console.log('✅ Slonik registered successfully: @',res.rows[0].username);
     console.log('✅ Password hash stored securely.');
   } catch (err) {
     console.error('❗ Error registering slonik:', err.message);
@@ -89,6 +89,33 @@ const run = async () => {
 }
 const username = process.argv[3];
 const password = process.argv[4];
+const newPassword = process.argv[5];
+
+async function updateSlonikPassword(username, password, newPassword) {
+   try {
+      const res = await pool.query('SELECT * FROM sloniki WHERE username = $1', [username]);
+      if (res.rows.length === 0) {
+         console.log('❌ No slonik found with that username.');
+         return;
+      }
+   
+      const slonik = res.rows[0];
+      const isMatch = await bcrypt.compare(password, slonik.password_hash);
+      if (isMatch) {
+      try {
+         const hash = await bcrypt.hash(newPassword, saltRounds);
+         await pool.query('UPDATE sloniki SET password_hash = $1 WHERE username = $2', [hash, username]);
+         console.log(`✅ Password updated for  @${username}`);
+      } catch (err) {
+      console.error('❗ Error updating slonik password:', err.message);
+      }
+      } else {
+         console.log('❌ Invalid password.');
+      }
+   } catch (err) {
+      console.error('❗ Error during password update:', err.message);
+   }
+}
 
 
 switch (process.argv[2]) {
@@ -105,6 +132,13 @@ switch (process.argv[2]) {
     case 'delete':
         await deleteSlonik (process.argv[3]);
         break;
+    case 'update-password':
+      if (!username || !password || !newPassword) {
+         console.error('❗ Please enter username, current password and new password: node <fileName>.js update-password <username> <current_password> <new_password>');
+         process.exit(1);
+      }
+      await updateSlonikPassword(process.argv[3], process.argv[4], process.argv[5]);
+      break;
    case 'login':
       if (!username || !password) {
          console.error('❗ Please enter both username and password: node <fileName>.js login <username> <password>');
@@ -119,8 +153,9 @@ switch (process.argv[2]) {
       console.log('1️⃣  list - Display all elephants');
       console.log('2️⃣  register + <username> <password> - Register a new slonik');
       console.log('3️⃣  login + <username> <password> - Login as a slonik');
-      console.log('4️⃣  delete + <id> - Delete a slonik by ID');
-      console.log('5️⃣  help - Display available commands');
+      console.log('4️⃣  update-password + <username> <current_password> <new_password> - Update a slonik password');
+      console.log('5️⃣  delete + <id> - Delete a slonik by ID');
+      console.log('6️⃣  help - Display available commands');
       console.log('—————————————————————————————————————————————')
       break;
    default:
