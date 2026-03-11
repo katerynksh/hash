@@ -25,12 +25,10 @@ bcrypt.compare(
     console.error(err);
 });
 if (!storedHash) {
-    // Якщо хешу немає — створюємо його і зберігаємо у файл
     const hash = await bcrypt.hash(inputPassword, saltRounds);
     writeFileSync(fileName, hash);
     console.log(`Hash saved to ${fileName}`);
 } else {
-    // Якщо хеш є — порівнюємо його з введеним паролем
     const isMatch = await bcrypt.compare(inputPassword, storedHash);
     
     if (isMatch) {
