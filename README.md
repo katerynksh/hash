@@ -1,6 +1,6 @@
 # Quick start:
 1. Install dependencies: `npm install`
-2. Run the script and follow the instructions in terminal: `node hash.js`
+2. Run the script and follow the instructions in terminal: `node hash.js` or `node login.sloniki.js`
 
 
 # About:
