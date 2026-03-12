@@ -1,11 +1,10 @@
 import bcrypt from 'bcrypt';
-// import { hash } from 'node:crypto';
-// import { createReadStream, read } from 'node:fs';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import dotenv from 'dotenv'
+import dotenv from 'dotenv';
 import pg from 'pg';
 
 dotenv.config()
+
+const SALT_ROUNDS = 10;
 
 const { Pool } = pg;
 const pool = new Pool({
@@ -28,17 +27,16 @@ const initializeDatabase = async () => {
 `;
    try {
       await pool.query(createTableQuery);
-    //   console.log('✅  The sloniki table is ready to go.');
    } catch (error) {
       console.error('❗ Error initializing database:', error.message);
       console.error('Full error:', error);
       throw error;
    }
 };
-const saltRounds = 10;
+
 async function registerSlonik(username, password) {
    try {
-      const hash = await bcrypt.hash(password, saltRounds);
+      const hash = await bcrypt.hash(password, SALT_ROUNDS);
       const query = `
       INSERT INTO sloniki (
             username, password_hash
@@ -47,10 +45,10 @@ async function registerSlonik(username, password) {
         RETURNING *`;
    const res = await pool.query(query, [username, hash]);
     
-    console.log('✅ Slonik registered successfully: @',res.rows[0].username);
+    console.log(`✅ Slonik registered successfully: @${res.rows[0].username}`);
     console.log('✅ Password hash stored securely.');
   } catch (err) {
-    console.error('❗ Error registering slonik:', err.message);
+    console.error(`❗ Error registering slonik: this slonik: @${username} is already exist`);
   }
 }
 
@@ -58,7 +56,7 @@ async function loginSlonik(username, password) {
    try {
       const res = await pool.query('SELECT * FROM sloniki WHERE username = $1', [username]);
       if (res.rows.length === 0) {
-         console.log('❌ No slonik found with that username.');
+         console.log(`❌ No slonik found with that username @${username}.`);
          return;
       }
       const slonik = res.rows[0];
@@ -80,13 +78,13 @@ async function deleteSlonik(id) {
 }
 
 async function getAllSloniki() {
-   const res = await pool.query('SELECT * FROM sloniki ORDER BY id ASC');
+   const res = await pool.query('SELECT * FROM sloniki ORDER BY id ASC'); //ASC - по зростанню, DESC - спадання
    console.log('✨ List of all sloniki:');
    console.table(res.rows);
 }
-const run = async () => {
-   await initializeDatabase();
-}
+
+await initializeDatabase();
+
 const username = process.argv[3];
 const password = process.argv[4];
 const newPassword = process.argv[5];
@@ -102,13 +100,13 @@ async function updateSlonikPassword(username, password, newPassword) {
       const slonik = res.rows[0];
       const isMatch = await bcrypt.compare(password, slonik.password_hash);
       if (isMatch) {
-      try {
-         const hash = await bcrypt.hash(newPassword, saltRounds);
-         await pool.query('UPDATE sloniki SET password_hash = $1 WHERE username = $2', [hash, username]);
-         console.log(`✅ Password updated for  @${username}`);
-      } catch (err) {
-      console.error('❗ Error updating slonik password:', err.message);
-      }
+         try {
+            const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+            await pool.query('UPDATE sloniki SET password_hash = $1 WHERE username = $2', [hash, username]);
+            console.log(`✅ Password updated for  @${username}`);
+         } catch (err) {
+            console.error('❗ Error updating slonik password:', err.message);
+         }
       } else {
          console.log('❌ Invalid password.');
       }
@@ -130,14 +128,14 @@ switch (process.argv[2]) {
       await registerSlonik(username, password);
       break;
     case 'delete':
-        await deleteSlonik (process.argv[3]);
+        await deleteSlonik (username);
         break;
     case 'update-password':
       if (!username || !password || !newPassword) {
          console.error('❗ Please enter username, current password and new password: node <fileName>.js update-password <username> <current_password> <new_password>');
          process.exit(1);
       }
-      await updateSlonikPassword(process.argv[3], process.argv[4], process.argv[5]);
+      await updateSlonikPassword(username, password, newPassword);
       break;
    case 'login':
       if (!username || !password) {
@@ -150,7 +148,7 @@ switch (process.argv[2]) {
       case 'help':
       console.log('————————————————————————————————————————————');
       console.log('Available commands:');
-      console.log('1️⃣  list - Display all elephants');
+      console.log('1️⃣  list - Display all sloniki');
       console.log('2️⃣  register + <username> <password> - Register a new slonik');
       console.log('3️⃣  login + <username> <password> - Login as a slonik');
       console.log('4️⃣  update-password + <username> <current_password> <new_password> - Update a slonik password');
