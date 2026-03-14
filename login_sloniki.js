@@ -2,7 +2,9 @@ import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 import pg from 'pg';
 
-dotenv.config()
+dotenv.config( )
+
+const SALT_ROUNDS = 10;
 
 const { Pool } = pg;
 const pool = new Pool({
@@ -32,7 +34,18 @@ const initializeDatabase = async () => {
       throw error;
    }
 };
-const saltRounds = 10;
+
+
+async function getAllSloniki() {
+   const res = await pool.query('SELECT * FROM sloniki ORDER BY id ASC'); //ASC - по зростанню, DESC - спадання
+   console.log('✨ List of all sloniki:');
+   console.table(res.rows.map(slonik => ({
+      id: slonik.id,
+      username: slonik.username,
+      created_at: slonik.created_at
+   })));
+}
+
 async function registerSlonik(username, password) {
    try {
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -44,18 +57,18 @@ async function registerSlonik(username, password) {
         RETURNING *`;
    const res = await pool.query(query, [username, hash]);
     
-    console.log('✅ Slonik registered successfully: @',res.rows[0].username);
-    console.log('✅ Password hash stored securely.');
-  } catch (err) {
-    console.error('❗ Error registering slonik:', err.message);
-  }
+    console.log(`✓ Slonik registered successfully: @${res.rows[0].username}`);
+    console.log('✓ Password hash stored securely.');
+   } catch (err) {
+      console.error(`!! Error registering slonik: this slonik: @${username} is already exist`);
+   }
 }
 
 async function loginSlonik(username, password) {
    try {
       const res = await pool.query('SELECT * FROM sloniki WHERE username = $1', [username]);
       if (res.rows.length === 0) {
-         console.log('❌ No slonik found with that username.');
+         console.log(`??? No slonik found with that username @${username}.`);
          return;
       }
       const slonik = res.rows[0];
@@ -71,22 +84,25 @@ async function loginSlonik(username, password) {
 }
 
 
-async function deleteSlonik(id) {
-   await pool.query('DELETE FROM sloniki WHERE id = $1', [id]);
-   console.log(`✅  The slonik with ID ${id} has been removed from the database..`);
+async function deleteSlonik(username, password) {
+   try {
+      const res = await pool.query('SELECT * FROM sloniki WHERE username = $1', [username]);
+      if (res.rows.length === 0) {
+         console.log('??? No slonik found with that username.');
+         return;
+      }
+      const slonik = res.rows[0];
+      const isMatch = await bcrypt.compare(password, slonik.password_hash);
+      if (isMatch) {
+         await pool.query('DELETE FROM sloniki WHERE username = $1', [username]);
+         console.log(`✓  The slonik @${username} has been removed from the database..`);
+      } else {
+         console.log('??? Invalid password.');
+      }
+   } catch (err) {
+      console.error('!! Error during deletion');
+   }
 }
-
-async function getAllSloniki() {
-   const res = await pool.query('SELECT * FROM sloniki ORDER BY id ASC');
-   console.log('✨ List of all sloniki:');
-   console.table(res.rows);
-}
-const run = async () => {
-   await initializeDatabase();
-}
-const username = process.argv[3];
-const password = process.argv[4];
-const newPassword = process.argv[5];
 
 async function updateSlonikPassword(username, password, newPassword) {
    try {
@@ -99,13 +115,13 @@ async function updateSlonikPassword(username, password, newPassword) {
       const slonik = res.rows[0];
       const isMatch = await bcrypt.compare(password, slonik.password_hash);
       if (isMatch) {
-      try {
-         const hash = await bcrypt.hash(newPassword, saltRounds);
-         await pool.query('UPDATE sloniki SET password_hash = $1 WHERE username = $2', [hash, username]);
-         console.log(`✅ Password updated for  @${username}`);
-      } catch (err) {
-      console.error('❗ Error updating slonik password:', err.message);
-      }
+         try {
+            const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+            await pool.query('UPDATE sloniki SET password_hash = $1 WHERE username = $2', [hash, username]);
+            console.log(`✓ Password updated for  @${username}`);
+         } catch (err) {
+            console.error('!! Error updating slonik password',);
+         }
       } else {
          console.log('??? Invalid password.');
       }
@@ -132,16 +148,6 @@ switch (command) {
       }
       await registerSlonik(username, password);
       break;
-    case 'delete':
-        await deleteSlonik (process.argv[3]);
-        break;
-    case 'update-password':
-      if (!username || !password || !newPassword) {
-         console.error('❗ Please enter username, current password and new password: node <fileName>.js update-password <username> <current_password> <new_password>');
-         process.exit(1);
-      }
-      await updateSlonikPassword(process.argv[3], process.argv[4], process.argv[5]);
-      break;
    case 'login':
       if (!username || !password) {
          console.error('!! Please enter both username and password: node <fileName>.js login <username> <password>');
@@ -166,12 +172,12 @@ switch (command) {
    case 'help':
       console.log('————————————————————————————————————————————');
       console.log('Available commands:');
-      console.log('1️⃣  list - Display all elephants');
-      console.log('2️⃣  register + <username> <password> - Register a new slonik');
-      console.log('3️⃣  login + <username> <password> - Login as a slonik');
-      console.log('4️⃣  update-password + <username> <current_password> <new_password> - Update a slonik password');
-      console.log('5️⃣  delete + <id> - Delete a slonik by ID');
-      console.log('6️⃣  help - Display available commands');
+      console.log('1️  list - Display all sloniki');
+      console.log('2️  register + <username> <password> - Register a new slonik');
+      console.log('3️  login + <username> <password> - Login as a slonik');
+      console.log('4️  update-password + <username> <current_password> <new_password> - Update a slonik password');
+      console.log('5️  delete + <id> - Delete a slonik by ID');
+      console.log('6️  help - Display available commands');
       console.log('—————————————————————————————————————————————')
       break;
    default:
