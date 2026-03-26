@@ -22,7 +22,9 @@ const initializeDatabase = async () => {
     CREATE TABLE IF NOT EXISTS sloniki (
     id SERIAL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,           
+    password_hash TEXT NOT NULL,
+    age TEXT NOT NULL,
+    place_of_birth TEXT NOT NULL,           
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
    );
       `;
@@ -42,25 +44,28 @@ async function getAllSloniki() {
    console.table(res.rows.map(slonik => ({
       id: slonik.id,
       username: slonik.username,
+      password_hash: slonik.password_hash,
+      age: slonik.age,
+      place_of_birth: slonik.place_of_birth,
       created_at: slonik.created_at
    })));
 }
 
-async function registerSlonik(username, password) {
+async function registerSlonik(username, password, age, place_of_birth) {
    try {
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
       const query = `
       INSERT INTO sloniki (
-            username, password_hash
+            username, password_hash, age, place_of_birth
         )
-        VALUES ($1, $2) 
+        VALUES ($1, $2, $3, $4) 
         RETURNING *`;
-   const res = await pool.query(query, [username, hash]);
+   const res = await pool.query(query, [username, hash, age, place_of_birth]);
     
     console.log(`✓ Slonik registered successfully: @${res.rows[0].username}`);
     console.log('✓ Password hash stored securely.');
-   } catch (err) {
-      console.error(`!! Error registering slonik: this slonik: @${username} is already exist`);
+   } catch (err) { console.error(err)
+      // console.error(`!! Error registering slonik: this slonik: @${username} is already exist`);
    }
 }
 
@@ -129,6 +134,46 @@ async function updateSlonikPassword(username, password, newPassword) {
       console.error('!! Error during password update');
    }
 }
+async function updateSlonikAge (username, password, newAge) {
+   try {
+      const res = await pool.query('SELECT * FROM sloniki WHERE username = $1', [username]);
+      if (res.rows.length === 0) {
+         console.log('??? No slonik found with that username.');
+         return;
+      }
+      const slonik = res.rows[0];
+      const isMatch = await bcrypt.compare(password, slonik.password_hash);
+      if (isMatch) {
+         await pool.query('UPDATE sloniki SET age = $1 WHERE username = $2', [newAge, username]);
+         console.log(`✓ Age updated for  @${username}`);
+      } else {
+         console.log('??? Invalid password.');
+      }
+   } catch (err) {
+      console.error('!! Error during age update');
+   }
+}
+
+async function updateSlonikPlaceOfBirth (username, password, newPlaceOfBirth) {
+   try {
+      const res = await pool.query('SELECT * FROM sloniki WHERE username = $1', [username]); 
+      if (res.rows.length === 0) {
+         console.log('??? No slonik found with that username.');
+         return;
+      }
+      const slonik = res.rows[0];
+      const isMatch = await bcrypt.compare(password, slonik.password_hash);
+      if (isMatch) {
+         await pool.query('UPDATE sloniki SET place_of_birth = $1 WHERE username = $2', [newPlaceOfBirth, username]);
+         console.log(`✓ Place of birth updated for  @${username}`);
+      } else {
+         console.log('??? Invalid password.');
+      }
+
+   } catch (err) {
+      console.error('!! Error during place of birth update');
+   }
+}
 
 await initializeDatabase();
 
@@ -136,17 +181,19 @@ const command = process.argv[2];
 const username = process.argv[3];
 const password = process.argv[4];
 const newPassword = process.argv[5];
+const newAge = process.argv[5];
+const newPlaceOfBirth = process.argv[6];
 
 switch (command) {
    case 'list':
       await getAllSloniki();
       break;
    case 'register':
-      if (!username || !password) {
-         console.error('!! Please enter both username and password: node <fileName>.js register <username> <password>');
+      if (!username || !password || !newAge || !newPlaceOfBirth) {
+         console.error('!! Please enter all required fields: node <fileName>.js register <username> <password> <age> <place_of_birth>');
          process.exit(1);
       }
-      await registerSlonik(username, password);
+      await registerSlonik(username, password, newAge, newPlaceOfBirth);
       break;
    case 'login':
       if (!username || !password) {
@@ -169,15 +216,31 @@ switch (command) {
       }
       await updateSlonikPassword(username, password, newPassword);
       break;
+   case 'updateAge':
+      if (!username || !password || !newAge) {
+         console.error('!! Please enter username, current password and new age: node <fileName>.js update-age <username> <current_password> <new_age>');
+         process.exit(1);
+      }
+      await updateSlonikAge(username, password, newAge);
+      break;
+   case 'updatePlaceOfBirth':
+      if (!username || !password || !newPlaceOfBirth) {
+         console.error('!! Please enter username, current password and new place of birth: node <fileName>.js update-place-of-birth <username> <current_password> <new_place_of_birth>');
+         process.exit(1);
+      }
+      await updateSlonikPlaceOfBirth(username, password, newPlaceOfBirth);
+      break;
    case 'help':
       console.log('————————————————————————————————————————————');
       console.log('Available commands:');
       console.log('1️  list - Display all sloniki');
-      console.log('2️  register + <username> <password> - Register a new slonik');
+      console.log('2️  register + <username> <password> <age> <place_of_birth> - Register a new slonik');
       console.log('3️  login + <username> <password> - Login as a slonik');
-      console.log('4️  update-password + <username> <current_password> <new_password> - Update a slonik password');
-      console.log('5️  delete + <id> - Delete a slonik by ID');
-      console.log('6️  help - Display available commands');
+      console.log('4️  updatePassword + <username> <current_password> <new_password> - Update a slonik password');
+      console.log('5  updateAge + <username> <current_password> <new_age> - Update a slonik age');
+      console.log('6️  updatePlaceOfBirth + <username> <current_password> <new_place_of_birth> - Update a slonik place of birth');
+      console.log('7️  delete + <id> - Delete a slonik by ID');
+      console.log('8️  help - Display available commands');
       console.log('—————————————————————————————————————————————')
       break;
    default:
